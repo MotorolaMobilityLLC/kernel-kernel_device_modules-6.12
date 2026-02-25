@@ -553,7 +553,7 @@ stop_repeat:
 			}
 		}
 	}
-	ret = pd_set_cap(dev, MTK_PD_APDO_START, 5000, 3000);
+	ret = pd_set_cap(dev, MTK_PD_APDO_START, max(5000, data->vta_min), min(3000, data->ita_max));
 	if (ret != MTK_ADAPTER_OK)
 		goto out;
 	ret = pd_get_output(dev, &vta_meas, &ita_meas);
