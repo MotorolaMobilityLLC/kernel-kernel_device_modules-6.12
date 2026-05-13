@@ -3908,7 +3908,10 @@ static bool pe50_is_algo_running(struct chg_alg_device *alg)
 	struct pe50_algo_data *data = info->data;
 	bool running = true;
 
-	mutex_lock(&data->lock);
+	if (!mutex_trylock(&data->lock)) {
+		PE50_DBG("algo busy, return running directly\n");
+		goto out;
+	}
 
 	if (!data->inited) {
 		running = false;
@@ -3916,9 +3919,10 @@ static bool pe50_is_algo_running(struct chg_alg_device *alg)
 	}
 	running = !(data->state == PE50_ALGO_STOP);
 	PE50_DBG("running = %d\n", running);
+
 out_unlock:
 	mutex_unlock(&data->lock);
-
+out:
 	return running;
 }
 
