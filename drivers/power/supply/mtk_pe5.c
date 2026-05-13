@@ -1167,11 +1167,19 @@ static int pe50_stop(struct pe50_algo_info *info, struct pe50_stop_info *sinfo)
 	do_reset = !(data->notify & PE50_RESET_NOTIFY);
 	mutex_unlock(&data->notify_lock);
 	if (do_reset) {
-		if (sinfo->hardreset_ta)
+		if (sinfo->hardreset_ta) {
 			pe50_hal_send_ta_hardreset(info->alg);
-		else if (sinfo->reset_ta)
-			pe50_enable_ta_charging(info, false, PE50_VTA_INIT,
-						PE50_ITA_INIT);
+		} else if (sinfo->reset_ta) {
+			if (data->vta_setting > PE50_VTA_INIT &&
+			    !pe50_hal_is_adaptor_power_change(info->alg,
+							      &data->ta_auth_data)) {
+				PE50_INFO("stop but keep high voltage:%d\n",
+					  data->vta_setting);
+			} else {
+				pe50_enable_ta_charging(info, false, PE50_VTA_INIT,
+							PE50_ITA_INIT);
+			}
+		}
 	}
 	if (data->cv_limit > 0)
 		pe50_hal_set_cv(info->alg, CHG1, data->cv_limit * 1000);
@@ -1205,8 +1213,10 @@ static inline void pe50_init_algo_data(struct pe50_algo_info *info)
 	data->suspect_ta_cc = false;
 	data->aicr_setting = 0;
 	data->ichg_setting = 0;
-	data->vta_setting = PE50_VTA_INIT;
-	data->ita_setting = PE50_ITA_INIT;
+	if (data->vta_setting <= PE50_VTA_INIT) {
+		data->vta_setting = PE50_VTA_INIT;
+		data->ita_setting = PE50_ITA_INIT;
+	}
 	data->ita_gap_per_vstep = 0;
 	data->ita_gap_window_idx = 0;
 	memset(data->ita_gaps, 0, sizeof(data->ita_gaps));
@@ -1487,12 +1497,23 @@ static int pe50_algo_init_with_ta_cc(struct pe50_algo_info *info)
 
 	PE50_DBG("++\n");
 
-	/* Change charging policy first */
-	ret = pe50_enable_ta_charging(info, true, PE50_VTA_INIT, PE50_ITA_INIT);
+	ret = pe50_set_dvchg_charging(info, false);
 	if (ret < 0) {
-		PE50_ERR("enable ta charging fail(%d)\n", ret);
-		sinfo.hardreset_ta = true;
+		PE50_ERR("disable dvchg fail(%d)\n", ret);
 		goto err;
+	}
+
+	/* Change charging policy first */
+	if (data->vta_setting > PE50_VTA_INIT) {
+		PE50_INFO("keep current ta setting vta:%d, ita:%d\n",
+			  data->vta_setting, data->ita_setting);
+	} else {
+		ret = pe50_enable_ta_charging(info, true, PE50_VTA_INIT, PE50_ITA_INIT);
+		if (ret < 0) {
+			PE50_ERR("enable ta charging fail(%d)\n", ret);
+			sinfo.hardreset_ta = true;
+			goto err;
+		}
 	}
 
 	ret = pe50_hal_enable_hz(info->alg, CHG1, false);
@@ -1638,12 +1659,23 @@ static int pe50_algo_init_with_ta_cv(struct pe50_algo_info *info)
 
 	PE50_DBG("++\n");
 
-	/* Change charging policy first */
-	ret = pe50_enable_ta_charging(info, true, PE50_VTA_INIT, PE50_ITA_INIT);
+	ret = pe50_set_dvchg_charging(info, false);
 	if (ret < 0) {
-		PE50_ERR("enable ta charging fail(%d)\n", ret);
-		sinfo.hardreset_ta = true;
+		PE50_ERR("disable dvchg fail(%d)\n", ret);
 		goto err;
+	}
+
+	/* Change charging policy first */
+	if (data->vta_setting > PE50_VTA_INIT) {
+		PE50_INFO("keep current ta setting vta:%d, ita:%d\n",
+			  data->vta_setting, data->ita_setting);
+	} else {
+		ret = pe50_enable_ta_charging(info, true, PE50_VTA_INIT, PE50_ITA_INIT);
+		if (ret < 0) {
+			PE50_ERR("enable ta charging fail(%d)\n", ret);
+			sinfo.hardreset_ta = true;
+			goto err;
+		}
 	}
 
 	ret = pe50_hal_set_aicr(info->alg, CHG1, data->ita_setting);
