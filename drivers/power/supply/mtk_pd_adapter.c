@@ -844,7 +844,9 @@ static int mtk_pd_adapter_probe(struct platform_device *pdev)
 		}
 	}
 
-	info->force_cv = of_property_read_bool(np, "force-cv");
+	info->force_cv = of_property_read_bool(np, "force-cv") ||
+				of_property_read_bool(np, "force_cv");
+	dev_info(info->dev, "%s force cv:%d\n", __func__, info->force_cv);
 
 	dev_info(info->dev, "%s successfully\n", __func__);
 
